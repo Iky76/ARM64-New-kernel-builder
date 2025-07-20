@@ -1,2 +1,152 @@
-Run DEVICE=$(echo "${DEVICE_NAME}" | sed 's/_defconfig//')
-{"ok":false,"error_code":400,"description":"Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 53"}{"ok":false,"error_code":400,"description":"Bad Request: can't parse entities: Can't find end of the entity starting at byte offset 53"}
+name: ⚙️ Lazy Builder Kernel Workflow
+
+on:
+  workflow_dispatch:
+    inputs:
+      kernel_source:
+        description: '🌐 Kernel source repo'
+        required: true
+        default: 'https://github.com/lynxprjkt/android_kernel_xiaomi_begonia'
+      kernel_branch:
+        description: '🌿 Branch kernel'
+        required: true
+        default: 'main'
+      defconfig_name:
+        description: '⚙️ Defconfig (e.g. begonia_user_defconfig)'
+        required: true
+        default: 'begonia_user_defconfig'
+      use_anykernel:
+        description: '📦 Use AnyKernel packaging? (yes / no)'
+        required: true
+        default: 'yes'
+      anykernel_source:
+        description: '🔗 AnyKernel source repo'
+        required: false
+        default: 'https://github.com/lynxprjkt/AnyKernel3'
+      anykernel_branch:
+        description: '🧵 AnyKernel branch'
+        required: false
+        default: 'main'
+      username:
+        description: '👤 Builder username'
+        required: true
+        default: 'lynx'
+      workspace_name:
+        description: '📁 Workspace name'
+        required: true
+        default: 'lynxworkspace'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      BUILD_USER: ${{ github.event.inputs.username }}
+      BUILD_HOST: ${{ github.event.inputs.workspace_name }}
+      DEVICE_NAME: ${{ github.event.inputs.defconfig_name }}
+      START_TIME: ${{ github.event.created_at }}
+
+    steps:
+      - name: 📨 Notify Telegram (Start)
+        run: |
+          RAW_DEVICE="${{ github.event.inputs.defconfig_name }}"
+          DEVICE=$(echo "$RAW_DEVICE" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S" -d "${{ github.event.created_at }}")
+
+          for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
+            curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
+              -d chat_id=$CHAT_ID \
+              -d text="⌛ *Kernel Build Started*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Triggered Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
+              -d parse_mode="MarkdownV2" \
+              -d reply_markup='{"inline_keyboard":[[{"text":"See Progress On Github","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
+          done
+
+      - name: 📥 Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential bc libncurses-dev bison flex libssl-dev libelf-dev curl wget zip git
+
+      - name: 🌀 Pull Lineage Clang Toolchain
+        run: |
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 aarch64-linux-android-4.9
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 arm-linux-androideabi-4.9
+          mkdir clang
+          curl https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android14-dev/clang-r487747c.tar.gz -RLO
+          tar -C clang/ -xf clang-*.tar.gz
+
+      - name: 🌿 Clone Kernel Source
+        run: |
+          git clone --depth=1 ${{ github.event.inputs.kernel_source }} -b ${{ github.event.inputs.kernel_branch }} ${{ github.event.inputs.workspace_name }}
+
+      - name: 🔨 Build Kernel
+        run: |
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+          export CROSS_COMPILE=$GITHUB_WORKSPACE/aarch64-linux-android-4.9/bin/aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/arm-linux-androideabi-4.9/bin/arm-linux-androideabi-
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export KBUILD_BUILD_USER=${{ env.BUILD_USER }}
+          export KBUILD_BUILD_HOST=${{ env.BUILD_HOST }}
+          cd ${{ github.event.inputs.workspace_name }}
+          make O=out ${{ github.event.inputs.defconfig_name }}
+          make -j$(nproc) O=out
+
+      - name: 📦 Package Kernel (AnyKernel)
+        if: ${{ github.event.inputs.use_anykernel == 'yes' }}
+        run: |
+          git clone --depth=1 ${{ github.event.inputs.anykernel_source }} -b ${{ github.event.inputs.anykernel_branch }} AnyKernel3
+          rm -rf AnyKernel3/.git AnyKernel3/.github AnyKernel3/LICENSE AnyKernel3/README.md
+          IMAGE_PATH=""
+          for file in Image.gz-dtb Image-dtb Image.gz Image; do
+            if [[ -f out/arch/arm64/boot/$file ]]; then
+              cp out/arch/arm64/boot/$file AnyKernel3/$file
+              IMAGE_PATH="AnyKernel3/$file"
+              break
+            fi
+          done
+          if [[ -f out/arch/arm64/boot/dtbo.img ]]; then
+            cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
+          fi
+          cd AnyKernel3
+          ZIP_NAME="kernel-${{ github.event.inputs.username }}-$(date +%Y%m%d-%H%M).zip"
+          zip -r9 "$ZIP_NAME" * -x "*.git*" "*.md" "LICENSE" ".github/*"
+
+      - name: 📤 Upload Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Flashable-Kernel
+          path: AnyKernel3/kernel-${{ github.event.inputs.username }}-*.zip
+
+      - name: ✅ Telegram Notification (Success)
+        if: success()
+        run: |
+          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S")
+
+          for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
+            curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
+              -d chat_id=$CHAT_ID \
+              -d text="✅ *Build Success*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
+              -d parse_mode="MarkdownV2" \
+              -d reply_markup='{"inline_keyboard":[[{"text":"Download Output","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
+          done
+
+      - name: ❌ Telegram Notification (Failed)
+        if: failure()
+        run: |
+          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
+          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S")
+
+          for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
+            curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
+              -d chat_id=$CHAT_ID \
+              -d text="❌ *Build Failed*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
+              -d parse_mode="MarkdownV2" \
+              -d reply_markup='{"inline_keyboard":[[{"text":"See
