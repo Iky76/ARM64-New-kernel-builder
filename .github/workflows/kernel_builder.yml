@@ -1,4 +1,4 @@
-name: 🌟 Kernel Build with Lynx Style
+name: 🌟 Kernel Build
 
 on:
   workflow_dispatch:
@@ -7,41 +7,40 @@ on:
         description: '🌐 Kernel source repo'
         required: true
         default: 'https://github.com/lynxprjkt/android_kernel_xiaomi_begonia'
-
       kernel_branch:
         description: '🌿 Branch kernel'
         required: true
         default: 'main'
-
       defconfig_name:
         description: '⚙️ Defconfig (e.g. begonia_user_defconfig)'
         required: true
         default: 'begonia_user_defconfig'
-
       use_anykernel:
         description: '📦 Use AnyKernel packaging? (yes / no)'
         required: true
         default: 'yes'
-
       anykernel_source:
         description: '🔗 AnyKernel source repo'
         required: false
         default: 'https://github.com/lynxprjkt/AnyKernel3'
-
       anykernel_branch:
         description: '🧵 AnyKernel branch'
         required: false
         default: 'main'
-
       username:
-        description: '👤 Builder username (shows in About Phone)'
+        description: '👤 Builder username'
         required: true
         default: 'lynx'
-
       workspace_name:
         description: '📁 Workspace name'
         required: true
         default: 'lynxworkspace'
+      telegram_token:
+        description: '🔐 Telegram bot token'
+        required: false
+      telegram_chat_id:
+        description: '💬 Telegram chat ID'
+        required: false
 
 jobs:
   build:
@@ -49,8 +48,21 @@ jobs:
     env:
       BUILD_USER: ${{ github.event.inputs.username }}
       BUILD_HOST: ${{ github.event.inputs.workspace_name }}
+      DEVICE_NAME: ${{ github.event.inputs.defconfig_name }}
+      START_TIME: ${{ github.event.created_at }}
 
     steps:
+      - name: 📨 Notify Telegram (Start)
+        if: ${{ github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != '' }}
+        run: |
+          DEVICE=$(echo "${DEVICE_NAME}" | sed 's/_defconfig//')
+          TIME=$(date +"%Y-%m-%d %H:%M:%S" -d "${{ github.event.created_at }}")
+          curl -s -X POST https://api.telegram.org/bot${{ github.event.inputs.telegram_token }}/sendMessage \
+            -d chat_id=${{ github.event.inputs.telegram_chat_id }} \
+            -d text="⌛ *Kernel Build Started*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Triggered Time* : ${TIME}\n⚙️ *Builder Name* : ${{ github.event.inputs.username }}" \
+            -d parse_mode=Markdown \
+            -d reply_markup='{"inline_keyboard":[[{"text":"See Progress On Github","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
+
       - name: 📥 Checkout Repo
         uses: actions/checkout@v4
 
@@ -59,7 +71,7 @@ jobs:
           sudo apt update
           sudo apt install -y build-essential bc libncurses-dev bison flex libssl-dev libelf-dev curl wget zip git
 
-      - name: 🌀 Pull Lineage Clang Toolchain
+      - name: 🌀 Pull Lineage Clang
         run: |
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 aarch64-linux-android-4.9
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 arm-linux-androideabi-4.9
@@ -85,30 +97,49 @@ jobs:
           make O=out ${{ github.event.inputs.defconfig_name }}
           make -j$(nproc) O=out
 
-      - name: 📦 Package Kernel (Only if using AnyKernel)
+      - name: 📦 Package Kernel (AnyKernel)
         if: ${{ github.event.inputs.use_anykernel == 'yes' }}
         run: |
           git clone --depth=1 ${{ github.event.inputs.anykernel_source }} -b ${{ github.event.inputs.anykernel_branch }} AnyKernel3
           rm -rf AnyKernel3/.git AnyKernel3/.github AnyKernel3/LICENSE AnyKernel3/README.md
-          if [[ -f out/arch/arm64/boot/Image.gz-dtb ]]; then
-            cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/Image.gz-dtb
-          elif [[ -f out/arch/arm64/boot/Image-dtb ]]; then
-            cp out/arch/arm64/boot/Image-dtb AnyKernel3/Image-dtb
-          elif [[ -f out/arch/arm64/boot/Image.gz ]]; then
-            cp out/arch/arm64/boot/Image.gz AnyKernel3/Image.gz
-          elif [[ -f out/arch/arm64/boot/Image ]]; then
-            cp out/arch/arm64/boot/Image AnyKernel3/Image
-          fi
+          IMAGE_PATH=""
+          for file in Image.gz-dtb Image-dtb Image.gz Image; do
+            if [[ -f out/arch/arm64/boot/$file ]]; then
+              cp out/arch/arm64/boot/$file AnyKernel3/$file
+              IMAGE_PATH="AnyKernel3/$file"
+              break
+            fi
+          done
           if [[ -f out/arch/arm64/boot/dtbo.img ]]; then
             cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
           fi
           cd AnyKernel3
-          output_name="kernel-${{ github.event.inputs.username }}-$(date +%Y%m%d-%H%M).zip"
-          zip -r9 "$output_name" * -x "*.git*" "*.md" "LICENSE" ".github/*"
-          echo "✅ Build complete: $output_name"
+          ZIP_NAME="kernel-${{ github.event.inputs.username }}-$(date +%Y%m%d-%H%M).zip"
+          zip -r9 "$ZIP_NAME" * -x "*.git*" "*.md" "LICENSE" ".github/*"
 
-      - name: 📤 Upload ZIP to Artifact
+      - name: 📤 Upload Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Flashable-Kernel
           path: AnyKernel3/kernel-${{ github.event.inputs.username }}-*.zip
+
+      - name: ✅ Telegram Notification (Success)
+        if: success() && github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != ''
+        run: |
+          DEVICE=$(echo "${DEVICE_NAME}" | sed 's/_defconfig//')
+          curl -s -X POST https://api.telegram.org/bot${{ github.event.inputs.telegram_token }}/sendMessage \
+            -d chat_id=${{ github.event.inputs.telegram_chat_id }} \
+            -d text="✅ *Build Success*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : $(date +"%Y-%m-%d %H:%M:%S")\n⚙️ *Builder Name* : ${{ github.event.inputs.username }}" \
+            -d parse_mode=Markdown \
+            -d reply_markup='{"inline_keyboard":[[{"text":"Download Output","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
+
+      - name: ❌ Telegram Notification (Failed)
+        if: failure() && github.event.inputs.telegram_token != '' && github.event.inputs.telegram_chat_id != ''
+        run: |
+          DEVICE=$(echo "${DEVICE_NAME}" | sed 's/_defconfig//')
+          curl -s -X POST https://api.telegram.org/bot${{ github.event.inputs.telegram_token }}/sendMessage \
+            -d chat_id=${{ github.event.inputs.telegram_chat_id }} \
+            -d text="❌ *Build Failed*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : $(date +"%Y-%m-%d %H:%M:%S")\n⚙️ *Builder Name* : ${{ github.event.inputs.username }}" \
+            -d parse_mode=Markdown \
+            -d reply_markup='{"inline_keyboard":[[{"text":"See Logs on Github","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
