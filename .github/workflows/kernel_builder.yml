@@ -1,4 +1,4 @@
-name: Build MikaKernel
+name: Build Kernel
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ jobs:
         run: |
           BUILD_TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
           MESSAGE=$(echo -e "⚙️ Build Started\n\n⌛ Trigger : Manual Workflow\n⏱️ Build Time : ${BUILD_TIME}\n🎃 Github Actor : ${{ github.actor }}")
-          curl -s -X POST https://api.telegram.org/bot${{ 7220916652:AAF82oATqo3S9qvJVvvL4QMB99FZtyV48vw }}/sendMessage \
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.7220916652:AAF82oATqo3S9qvJVvvL4QMB99FZtyV48vw }}/sendMessage \
             -d chat_id=${{ secrets.-1002815222621 }} \
             -d parse_mode="Markdown" \
             -d text="${MESSAGE}"
