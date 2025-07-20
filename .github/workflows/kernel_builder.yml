@@ -13,7 +13,7 @@ jobs:
       - name: 📨 Notify Telegram (Started)
         run: |
           BUILD_TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
-          MESSAGE="⚙️ Build Started\n\n⌛ Trigger : Manual Workflow\n⏱️ Build Time : ${BUILD_TIME}\n🎃 Github Actor : ${{ github.actor }}"
+          MESSAGE=$(echo -e "⚙️ Build Started\n\n⌛ Trigger : Manual Workflow\n⏱️ Build Time : ${BUILD_TIME}\n🎃 Github Actor : ${{ github.actor }}")
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
             -d parse_mode="Markdown" \
@@ -80,7 +80,7 @@ jobs:
         if: success()
         run: |
           TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
-          MESSAGE="✅ Build Finished\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}"
+          MESSAGE=$(echo -e "✅ Build Finished\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}")
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
             -d parse_mode="Markdown" \
@@ -90,7 +90,7 @@ jobs:
         if: failure()
         run: |
           TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
-          MESSAGE="❌ Build Failed\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}"
+          MESSAGE=$(echo -e "❌ Build Failed\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}")
           curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
             -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
             -d parse_mode="Markdown" \
