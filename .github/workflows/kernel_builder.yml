@@ -43,28 +43,24 @@ jobs:
       BUILD_USER: ${{ github.event.inputs.username }}
       BUILD_HOST: ${{ github.event.inputs.workspace_name }}
       DEVICE_NAME: ${{ github.event.inputs.defconfig_name }}
-      START_TIME: ${{ github.event.created_at }}
 
     steps:
-      - name: 📨 Notify Telegram (Start)
+      - name: ⏳ Notify Telegram (Start)
         run: |
-          RAW_DEVICE="${{ github.event.inputs.defconfig_name }}"
-          DEVICE=$(echo "$RAW_DEVICE" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S" -d "${{ github.event.created_at }}")
-
+          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//')
+          TIME=$(date +"%Y-%m-%d %H:%M:%S")
           for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
             curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
               -d chat_id=$CHAT_ID \
-              -d text="⌛ *Kernel Build Started*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Triggered Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
-              -d parse_mode="MarkdownV2" \
+              -d parse_mode="Markdown" \
+              -d text="⌛ Kernel Build Started\n\n📱 Device: ${DEVICE}\n⏱️ Triggered Time: ${TIME}\n⚙️ Builder Name: ${{ github.event.inputs.username }}" \
               -d reply_markup='{"inline_keyboard":[[{"text":"See Progress On Github","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
           done
 
       - name: 📥 Checkout Repo
         uses: actions/checkout@v4
 
-      - name: ⚙️ Install Dependencies
+      - name: 🛠 Install Dependencies
         run: |
           sudo apt update
           sudo apt install -y build-essential bc libncurses-dev bison flex libssl-dev libelf-dev curl wget zip git
@@ -100,11 +96,9 @@ jobs:
         run: |
           git clone --depth=1 ${{ github.event.inputs.anykernel_source }} -b ${{ github.event.inputs.anykernel_branch }} AnyKernel3
           rm -rf AnyKernel3/.git AnyKernel3/.github AnyKernel3/LICENSE AnyKernel3/README.md
-          IMAGE_PATH=""
           for file in Image.gz-dtb Image-dtb Image.gz Image; do
             if [[ -f out/arch/arm64/boot/$file ]]; then
               cp out/arch/arm64/boot/$file AnyKernel3/$file
-              IMAGE_PATH="AnyKernel3/$file"
               break
             fi
           done
@@ -125,28 +119,25 @@ jobs:
       - name: ✅ Telegram Notification (Success)
         if: success()
         run: |
-          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S")
-
+          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//')
+          TIME=$(date +"%Y-%m-%d %H:%M:%S")
           for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
             curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
               -d chat_id=$CHAT_ID \
-              -d text="✅ *Build Success*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
-              -d parse_mode="MarkdownV2" \
+              -d parse_mode="Markdown" \
+              -d text="✅ Build Success\n\n📱 Device: ${DEVICE}\n⏱️ Time: ${TIME}\n⚙️ Builder Name: ${{ github.event.inputs.username }}" \
               -d reply_markup='{"inline_keyboard":[[{"text":"Download Output","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
           done
 
       - name: ❌ Telegram Notification (Failed)
         if: failure()
         run: |
-          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//' | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          USER=$(echo "${{ github.event.inputs.username }}" | sed 's/[_*()[\]~`>#+\-=|{}.!]/\\&/g')
-          TIME=$(date +"%Y\\-%m\\-%d %H\\:%M\\:%S")
-
+          DEVICE=$(echo "${{ github.event.inputs.defconfig_name }}" | sed 's/_defconfig//')
+          TIME=$(date +"%Y-%m-%d %H:%M:%S")
           for CHAT_ID in ${{ secrets.TELEGRAM_CHAT_ID }}; do
             curl -s -X POST https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage \
               -d chat_id=$CHAT_ID \
-              -d text="❌ *Build Failed*\n\n📱 *Device* : ${DEVICE}\n⏱️ *Time* : ${TIME}\n⚙️ *Builder Name* : ${USER}" \
-              -d parse_mode="MarkdownV2" \
-              -d reply_markup='{"inline_keyboard":[[{"text":"See
+              -d parse_mode="Markdown" \
+              -d text="❌ Build Failed\n\n📱 Device: ${DEVICE}\n⏱️ Time: ${TIME}\n⚙️ Builder Name: ${{ github.event.inputs.username }}" \
+              -d reply_markup='{"inline_keyboard":[[{"text":"See Logs on Github","url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]]}'
+          done
