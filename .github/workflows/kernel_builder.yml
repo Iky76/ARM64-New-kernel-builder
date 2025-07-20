@@ -1,4 +1,4 @@
-name: 🌟 Start Your Kernel
+name: 🌟 Kernel Build with Lynx Style
 
 on:
   workflow_dispatch:
@@ -7,32 +7,39 @@ on:
         description: '🌐 Kernel source repo'
         required: true
         default: 'https://github.com/lynxprjkt/android_kernel_xiaomi_begonia'
+
       kernel_branch:
-        description: '🌿 Kernel branch'
+        description: '🌿 Branch kernel'
         required: true
         default: 'main'
+
       defconfig_name:
-        description: '🛠️ Defconfig (ex: begonia_user_defconfig)'
+        description: '⚙️ Defconfig (e.g. begonia_user_defconfig)'
         required: true
         default: 'begonia_user_defconfig'
+
       use_anykernel:
         description: '📦 Use AnyKernel packaging? (yes / no)'
         required: true
         default: 'yes'
+
       anykernel_source:
         description: '🔗 AnyKernel source repo'
         required: false
         default: 'https://github.com/lynxprjkt/AnyKernel3'
+
       anykernel_branch:
         description: '🧵 AnyKernel branch'
         required: false
         default: 'main'
-      output_name:
-        description: '🧃 Output ZIP name (auto-timestamp recommended)'
+
+      username:
+        description: '👤 Builder username (shows in About Phone)'
         required: true
-        default: 'axira_begonia-${{ github.run_id }}'
+        default: 'lynx'
+
       workspace_name:
-        description: '📁 Workspace folder name'
+        description: '📁 Workspace name'
         required: true
         default: 'lynxworkspace'
 
@@ -40,7 +47,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      BUILD_USER: lynxdev
+      BUILD_USER: ${{ github.event.inputs.username }}
       BUILD_HOST: ${{ github.event.inputs.workspace_name }}
 
     steps:
@@ -78,7 +85,7 @@ jobs:
           make O=out ${{ github.event.inputs.defconfig_name }}
           make -j$(nproc) O=out
 
-      - name: 📦 Package Kernel with AnyKernel (Conditional)
+      - name: 📦 Package Kernel (Only if using AnyKernel)
         if: ${{ github.event.inputs.use_anykernel == 'yes' }}
         run: |
           git clone --depth=1 ${{ github.event.inputs.anykernel_source }} -b ${{ github.event.inputs.anykernel_branch }} AnyKernel3
@@ -96,10 +103,12 @@ jobs:
             cp out/arch/arm64/boot/dtbo.img AnyKernel3/dtbo.img
           fi
           cd AnyKernel3
-          zip -r9 ${{ github.event.inputs.output_name }}.zip * -x "*.git*" "*.md" "LICENSE" ".github/*"
+          output_name="kernel-${{ github.event.inputs.username }}-$(date +%Y%m%d-%H%M).zip"
+          zip -r9 "$output_name" * -x "*.git*" "*.md" "LICENSE" ".github/*"
+          echo "✅ Build complete: $output_name"
 
-      - name: 📤 Upload Flashable ZIP
+      - name: 📤 Upload ZIP to Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Flashable-Kernel
-          path: AnyKernel3/${{ github.event.inputs.output_name }}.zip
+          path: AnyKernel3/kernel-${{ github.event.inputs.username }}-*.zip
