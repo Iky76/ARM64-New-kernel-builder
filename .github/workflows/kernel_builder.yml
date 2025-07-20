@@ -14,8 +14,8 @@ jobs:
         run: |
           BUILD_TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
           MESSAGE=$(echo -e "⚙️ Build Started\n\n⌛ Trigger : Manual Workflow\n⏱️ Build Time : ${BUILD_TIME}\n🎃 Github Actor : ${{ github.actor }}")
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.7220916652:AAEAp4jrveiqgl97zfmp-P1jpOxjCc_QPJY }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.AAFNEuEf1KjTMUzhDviWFB_fXasUA9eYhOw }}/sendMessage \
+            -d chat_id=${{ secrets.7220916652 }} \
             -d parse_mode="Markdown" \
             -d text="${MESSAGE}"
 
@@ -81,8 +81,8 @@ jobs:
         run: |
           TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
           MESSAGE=$(echo -e "✅ Build Finished\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}")
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.7220916652:AAEAp4jrveiqgl97zfmp-P1jpOxjCc_QPJY }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.AAFNEuEf1KjTMUzhDviWFB_fXasUA9eYhOw }}/sendMessage \
+            -d chat_id=${{ secrets.7220916652 }} \
             -d parse_mode="Markdown" \
             -d text="${MESSAGE}"
 
@@ -91,7 +91,7 @@ jobs:
         run: |
           TIME=$(TZ="Asia/Jakarta" date +"%Y-%m-%d %H:%M:%S")
           MESSAGE=$(echo -e "❌ Build Failed\n\n📱 Device: ${{ env.KERNEL_CONFIG }}\n⏱️ Build Time: ${TIME}\n🎃 Github Actor: ${{ github.actor }}")
-          curl -s -X POST https://api.telegram.org/bot${{ secrets.7220916652:AAEAp4jrveiqgl97zfmp-P1jpOxjCc_QPJY }}/sendMessage \
-            -d chat_id=${{ secrets.TELEGRAM_CHAT_ID }} \
+          curl -s -X POST https://api.telegram.org/bot${{ secrets.AAFNEuEf1KjTMUzhDviWFB_fXasUA9eYhOw }}/sendMessage \
+            -d chat_id=${{ secrets.7220916652 }} \
             -d parse_mode="Markdown" \
             -d text="${MESSAGE}"
